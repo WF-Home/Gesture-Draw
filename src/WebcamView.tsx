@@ -1,18 +1,61 @@
-import React, {useEffect, useRef} from 'react';
-import Webcam from "react-webcam";
-import {Camera} from "@mediapipe/camera_utils";
-import {HAND_CONNECTIONS, Holistic, Results} from '@mediapipe/holistic';
-import {drawConnectors, drawLandmarks} from '@mediapipe/drawing_utils';
+import {useEffect, useRef} from 'react';
+import { GestureRecognizer, FilesetResolver, GestureRecognizerResult } from '@mediapipe/tasks-vision';
 import './WebcamView.css';
+import { GestureType } from './GestureType';
 
 function WebcamView() {
-  const webcamRef = useRef<Webcam>(null);
+  const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
 
-  const onResults = (results: Results) => {
-    if (!webcamRef.current?.video || !canvasRef.current) return
-    const videoWidth = webcamRef.current.video.videoWidth;
-    const videoHeight = webcamRef.current.video.videoHeight;
+const HAND_CONNECTIONS: number[][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4],       // thumb
+  [0, 5], [5, 6], [6, 7], [7, 8],       // index
+  [5, 9], [9,10], [10,11], [11,12],     // middle
+  [9,13], [13,14], [14,15], [15,16],    // ring
+  [13,17], [17,18], [18,19], [19,20],   // pinky
+  [0,17]                                // palm base
+];
+
+  function drawLandmark(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number
+  ) {
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    ctx.fillStyle = "#006800";
+    ctx.fill();
+  }
+
+  function drawLine(
+    ctx: CanvasRenderingContext2D,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number
+  ) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = "#5b0000";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+
+
+  const onResults = (results: GestureRecognizerResult) => {
+    if (!webcamRef.current || !canvasRef.current) return
+    const videoWidth = webcamRef.current.videoWidth;
+    const videoHeight = webcamRef.current.videoHeight;
+    const gesture = results.gestures[0][0];
+
+    if (gesture.categoryName === GestureType.thumbsUp) {
+        console.log(gesture.categoryName)
+        console.log(results.gestures[0][0].categoryName);
+    }
+
     canvasRef.current.width = videoWidth;
     canvasRef.current.height = videoHeight;
 
@@ -22,68 +65,100 @@ function WebcamView() {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-    // Only overwrite existing pixels.
-    canvasCtx.globalCompositeOperation = 'source-in';
-    canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
 
-    // Only overwrite missing pixels.
-    canvasCtx.globalCompositeOperation = 'destination-atop';
-    canvasCtx.drawImage(
-      results.image, 0, 0, canvasElement.width, canvasElement.height);
+    if (results.landmarks.length > 0) {
+      const landmarks = results.landmarks[0];
 
-    canvasCtx.globalCompositeOperation = 'source-over';
-    // drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
-    //   {color: '#00FF00', lineWidth: 4});
-    // drawLandmarks(canvasCtx, results.poseLandmarks,
-    //   {color: '#FF0000', lineWidth: 2});
-    drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS,
-      {color: '#CC0000', lineWidth: 5});
-    drawLandmarks(canvasCtx, results.leftHandLandmarks,
-      {color: '#00FF00', lineWidth: 2});
-    drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS,
-      {color: '#00CC00', lineWidth: 5});
-    drawLandmarks(canvasCtx, results.rightHandLandmarks,
-      {color: '#FF0000', lineWidth: 2});
-    canvasCtx.restore();
+      // ✅ Draw connections
+      HAND_CONNECTIONS.forEach(([start, end]) => {
+        const a = landmarks[start];
+        const b = landmarks[end];
+
+        drawLine(
+          canvasCtx,
+          a.x * canvasElement.width,
+          a.y * canvasElement.height,
+          b.x * canvasElement.width,
+          b.y * canvasElement.height
+        );
+      });
+
+      // ✅ Draw points
+      landmarks.forEach((point) => {
+        drawLandmark(
+          canvasCtx,
+          point.x * canvasElement.width,
+          point.y * canvasElement.height
+        );
+      });
+    }
   }
 
   useEffect(() => {
-    const holistic = new Holistic({
-      locateFile: (file: string) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
-      }
-    });
-    holistic.setOptions({
-      selfieMode: true,
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: true,
-      smoothSegmentation: true,
-      refineFaceLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-    holistic.onResults(onResults);
+    let running = true;
 
-    if (
-      typeof webcamRef.current !== "undefined" &&
-      webcamRef.current !== null
-    ) {
-      if (!webcamRef.current?.video) return
-      const camera = new Camera(webcamRef.current.video, {
-        onFrame: async () => {
-          if (!webcamRef.current?.video) return
-          await holistic.send({image: webcamRef.current.video});
-        },
-        width: 640,
-        height: 480,
+  async function init() {
+      // Load WASM files
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      );
+
+      // Create recognizer
+      gestureRecognizerRef.current = await GestureRecognizer.createFromOptions(
+        vision,
+        {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-tasks/gesture_recognizer/gesture_recognizer.task",
+          },
+          runningMode: "VIDEO",
+          numHands: 2,
+        }
+      );
+
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+      if (!webcamRef.current) return;
+
+      webcamRef.current.srcObject = stream;
+
+      // ✅ wait until browser finishes attaching stream
+      await new Promise<void>((resolve) => {
+        webcamRef.current!.onloadedmetadata = () => resolve();
       });
-      camera.start();
+
+      await webcamRef.current.play();
+
+      requestAnimationFrame(detect);
     }
+
+    const detect = async () => {
+      if (!running || !webcamRef.current || !gestureRecognizerRef.current) {
+        return;
+      }
+
+      const now = performance.now();
+
+      const result: GestureRecognizerResult =
+        gestureRecognizerRef.current.recognizeForVideo(
+          webcamRef.current!,
+          now
+        );
+
+      // ✅ Results
+      if (result.gestures.length > 0) { 
+        onResults(result)
+      }
+
+      requestAnimationFrame(detect);
+    };
+
+    init();
+
   }, [])
   return (
     <>
-        <Webcam ref={webcamRef} id="webcam" />
+        <video ref={webcamRef} id="webcam" />
         <canvas ref={canvasRef} id="canvas" />
     </>
   );
