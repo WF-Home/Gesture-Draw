@@ -12,6 +12,7 @@ function WebcamView() {
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const prevPointRef = useRef<{ x: number; y: number } | null>(null);
   const isDrawingRef = useRef(false);
+  let lineWidth = 4;
 
 
   const onResults = (results: GestureRecognizerResult) => {
@@ -36,8 +37,14 @@ function WebcamView() {
     artCtx.save();
 
     if (gesture.categoryName === GestureType.thumbsUp) {
-        console.log(results.handedness)
-    } if (gesture.categoryName === GestureType.up) {
+        if (lineWidth < 15) {
+          lineWidth++;
+        }
+    } else if (gesture.categoryName === GestureType.thumbsDown) {
+        if (lineWidth > 1) {
+          lineWidth--;
+        }
+    } else if (gesture.categoryName === GestureType.up) {
         const tip = results.landmarks[0][8]
         const x = (1 - tip.x) * artElement.width;
         const y = (tip.y * artElement.height) + 30;
@@ -48,7 +55,8 @@ function WebcamView() {
             prevPointRef.current.x,
             prevPointRef.current.y,
             x,
-            y
+            y,
+            lineWidth
           );
         }
         prevPointRef.current = { x, y };
