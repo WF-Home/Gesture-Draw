@@ -2,47 +2,21 @@ import {useEffect, useRef} from 'react';
 import { GestureRecognizer, FilesetResolver, GestureRecognizerResult } from '@mediapipe/tasks-vision';
 import './WebcamView.css';
 import { GestureType } from './GestureType';
+import { drawLandmark, drawLine } from './Helper';
 
 function WebcamView() {
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
 
-const HAND_CONNECTIONS: number[][] = [
-  [0, 1], [1, 2], [2, 3], [3, 4],       // thumb
-  [0, 5], [5, 6], [6, 7], [7, 8],       // index
-  [5, 9], [9,10], [10,11], [11,12],     // middle
-  [9,13], [13,14], [14,15], [15,16],    // ring
-  [13,17], [17,18], [18,19], [19,20],   // pinky
-  [0,17]                                // palm base
-];
-
-  function drawLandmark(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number
-  ) {
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, 2 * Math.PI);
-    ctx.fillStyle = "#006800";
-    ctx.fill();
-  }
-
-  function drawLine(
-    ctx: CanvasRenderingContext2D,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number
-  ) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = "#5b0000";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
+  const HAND_CONNECTIONS: number[][] = [
+    [0, 1], [1, 2], [2, 3], [3, 4],       // thumb
+    [0, 5], [5, 6], [6, 7], [7, 8],       // index
+    [5, 9], [9,10], [10,11], [11,12],     // middle
+    [9,13], [13,14], [14,15], [15,16],    // ring
+    [13,17], [17,18], [18,19], [19,20],   // pinky
+    [0,17]                                // palm base
+  ];
 
 
   const onResults = (results: GestureRecognizerResult) => {
@@ -52,8 +26,7 @@ const HAND_CONNECTIONS: number[][] = [
     const gesture = results.gestures[0][0];
 
     if (gesture.categoryName === GestureType.thumbsUp) {
-        console.log(gesture.categoryName)
-        console.log(results.gestures[0][0].categoryName);
+        console.log(results.handedness)
     }
 
     canvasRef.current.width = videoWidth;
@@ -67,30 +40,32 @@ const HAND_CONNECTIONS: number[][] = [
 
 
     if (results.landmarks.length > 0) {
-      const landmarks = results.landmarks[0];
+      const handLandmarks = results.landmarks;
 
       // ✅ Draw connections
-      HAND_CONNECTIONS.forEach(([start, end]) => {
-        const a = landmarks[start];
-        const b = landmarks[end];
+      handLandmarks.forEach( landmarks => {
+        HAND_CONNECTIONS.forEach(([start, end]) => {
+          const a = landmarks[start];
+          const b = landmarks[end];
 
-        drawLine(
-          canvasCtx,
-          a.x * canvasElement.width,
-          a.y * canvasElement.height,
-          b.x * canvasElement.width,
-          b.y * canvasElement.height
-        );
-      });
+          drawLine(
+            canvasCtx,
+            a.x * canvasElement.width,
+            a.y * canvasElement.height,
+            b.x * canvasElement.width,
+            b.y * canvasElement.height
+          );
+        });
 
       // ✅ Draw points
-      landmarks.forEach((point) => {
-        drawLandmark(
-          canvasCtx,
-          point.x * canvasElement.width,
-          point.y * canvasElement.height
-        );
-      });
+        landmarks.forEach((point) => {
+          drawLandmark(
+            canvasCtx,
+            point.x * canvasElement.width,
+            point.y * canvasElement.height
+          );
+        });
+      })
     }
   }
 
