@@ -5,9 +5,6 @@ function App() {
   return (
     <>
       <section id="app">
-        <section>
-          <h1>Gesture Draw</h1>
-        </section>
         <WebcamView />
       </section>
     </>
