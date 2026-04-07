@@ -2,71 +2,31 @@ import {useEffect, useRef} from 'react';
 import { GestureRecognizer, FilesetResolver, GestureRecognizerResult } from '@mediapipe/tasks-vision';
 import './WebcamView.css';
 import { GestureType } from './GestureType';
-import { drawLandmark, drawLine } from './Helper';
+import { landmarksCanvas } from './utilities/LandmarksCanvas';
 
 function WebcamView() {
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const artboardRef = useRef<HTMLCanvasElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
 
-  const HAND_CONNECTIONS: number[][] = [
-    [0, 1], [1, 2], [2, 3], [3, 4],       // thumb
-    [0, 5], [5, 6], [6, 7], [7, 8],       // index
-    [5, 9], [9,10], [10,11], [11,12],     // middle
-    [9,13], [13,14], [14,15], [15,16],    // ring
-    [13,17], [17,18], [18,19], [19,20],   // pinky
-    [0,17]                                // palm base
-  ];
-
-
   const onResults = (results: GestureRecognizerResult) => {
-    if (!webcamRef.current || !canvasRef.current) return
+    if (!webcamRef.current || !canvasRef.current || !artboardRef.current) return
     const videoWidth = webcamRef.current.videoWidth;
     const videoHeight = webcamRef.current.videoHeight;
+    canvasRef.current.width = videoWidth;
+    canvasRef.current.height = videoHeight;
+    artboardRef.current.width = videoWidth;
+    artboardRef.current.height = videoHeight;
+
     const gesture = results.gestures[0][0];
 
     if (gesture.categoryName === GestureType.thumbsUp) {
         console.log(results.handedness)
     }
 
-    canvasRef.current.width = videoWidth;
-    canvasRef.current.height = videoHeight;
+    landmarksCanvas(canvasRef.current, results);
 
-    const canvasElement = canvasRef.current;
-    const canvasCtx = canvasElement.getContext("2d");
-    if (canvasCtx == null) throw new Error('Could not get context');
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-
-    if (results.landmarks.length > 0) {
-      const handLandmarks = results.landmarks;
-
-      // ✅ Draw connections
-      handLandmarks.forEach( landmarks => {
-        HAND_CONNECTIONS.forEach(([start, end]) => {
-          const a = landmarks[start];
-          const b = landmarks[end];
-
-          drawLine(
-            canvasCtx,
-            a.x * canvasElement.width,
-            a.y * canvasElement.height,
-            b.x * canvasElement.width,
-            b.y * canvasElement.height
-          );
-        });
-
-      // ✅ Draw points
-        landmarks.forEach((point) => {
-          drawLandmark(
-            canvasCtx,
-            point.x * canvasElement.width,
-            point.y * canvasElement.height
-          );
-        });
-      })
-    }
   }
 
   useEffect(() => {
@@ -132,10 +92,11 @@ function WebcamView() {
 
   }, [])
   return (
-    <>
+    <section id="webcam-container">
         <video ref={webcamRef} id="webcam" />
         <canvas ref={canvasRef} id="canvas" />
-    </>
+        <canvas ref={artboardRef} id="artboard" />
+    </section>
   );
 }
 

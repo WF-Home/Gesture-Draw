@@ -4,10 +4,10 @@ import './App.css';
 function App() {
   return (
     <>
-      <section id="left-side">
-
-      </section>
-      <section id="right-side">
+      <section id="app">
+        <section>
+          <h1>Gesture Draw</h1>
+        </section>
         <WebcamView />
       </section>
     </>

@@ -1,8 +1,4 @@
-#left-side {
-  width: 50%;
-  background-color: black;
-}
-
-#right-side {
-  max-width: 50%
+#app {
+  display: flex;
+  flex-direction: column-reverse;
 }
